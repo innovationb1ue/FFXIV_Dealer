@@ -1,13 +1,23 @@
 import requests
-from settings import SERVERS, ITEMS
+from settings import SERVERS, ITEMS, LOCAL_SERVER
 import numpy as np
+import json
+import os
+import time
 
 MARKET_BOARD_LISTING_URL = 'https://universalis.app/api/{}/{}'
+
+ITEM_INFO_URL = 'https://cafemaker.wakingsands.com/item/{}'
 
 
 class FFXIVDealer:
     def __init__(self):
         self.s = requests.Session()
+        if os.path.exists('./item.json'):
+            with open('./item.json', 'r') as f:
+                self.item_info = json.load(f)
+        else:
+            self.item_info = {}
 
     def get_item(self, world_id: str, item_id: str) -> dict[str]:
         url = MARKET_BOARD_LISTING_URL.format(world_id, item_id)
@@ -19,29 +29,44 @@ class FFXIVDealer:
         max_price_nq = res_json['maxPriceNQ']
         min_price_hq = res_json['minPriceHQ']
         max_price_hq = res_json['maxPriceHQ']
+        average_price_hq = res_json['averagePriceHQ']
+        average_price_nq = res_json['averagePriceNQ']
         prices = [i['pricePerUnit'] for i in listings]
+
+        if not self.item_info.get(item_id):
+            resp = self.s.get(ITEM_INFO_URL.format(item_id), timeout=5)
+            item_info_res_json = resp.json()
+            self.item_info[item_id] = {}
+            self.item_info[item_id]['item_name'] = item_info_res_json['Singular_chs']
+            with open('./item.json', 'w') as f:
+                json.dump(self.item_info, f)
+
         return {'prices': prices, "world_name": world_name,
                 'min_price_nq': min_price_nq,
                 'max_price_nq': max_price_nq,
                 'min_price_hq': min_price_hq,
-                'max_price_hq': max_price_hq
+                'max_price_hq': max_price_hq,
+                'average_price_hq': average_price_hq,
+                'average_price_nq': average_price_nq,
+                'item_name': self.item_info[item_id]['item_name']
                 }
 
     def query_all(self):
         for item_id in ITEMS:
-            min_prices_hq = []
-            max_prices_hq = []
+            local_price = self.get_item(LOCAL_SERVER[0], item_id)['average_price_hq']
+            average_prices_nq = []
+            average_prices_hq = []
             server_names = []
             for server in SERVERS:
                 item_info = self.get_item(server, item_id)
-                min_prices_hq.append(item_info['min_price_hq'])
-                max_prices_hq.append(item_info['max_price_hq'])
+                average_prices_nq.append(item_info['average_price_nq'])
+                average_prices_hq.append(item_info['average_price_hq'])
                 server_names.append(item_info['world_name'])
-            idx = np.argmax(max_prices_hq)
-            idx1 = np.argmin(min_prices_hq)
-            gap = max_prices_hq[idx] - min_prices_hq[idx1]
-            if gap > 20000:
-                print(f"Buy at {server_names[idx1]}, Sell at {server_names[idx]}, Expect revenue: {gap}")
+            idx = np.argmin(average_prices_hq)
+            gap = local_price - average_prices_hq[idx]
+            if gap > 10000:
+                print(f"{self.item_info[item_id]['item_name']}, Buy at {server_names[idx]}, Sell at {LOCAL_SERVER}, Expect revenue: {gap}")
+            time.sleep(2)
 
 
 if __name__ == '__main__':
