@@ -6,6 +6,7 @@ import os
 import time
 
 MARKET_BOARD_LISTING_URL = 'https://universalis.app/api/{}/{}'
+MARKET_SALES_URL = 'https://universalis.app/api/history/{}/{}'
 
 ITEM_INFO_URL = 'https://cafemaker.wakingsands.com/item/{}'
 
@@ -19,7 +20,7 @@ class FFXIVDealer:
         else:
             self.item_info = {}
 
-    def get_item(self, world_id: str, item_id: str) -> dict[str]:
+    def get_board_list_info(self, world_id: str, item_id: str) -> dict[str]:
         url = MARKET_BOARD_LISTING_URL.format(world_id, item_id)
         resp = self.s.get(url, timeout=5)
         res_json = resp.json()
@@ -41,7 +42,8 @@ class FFXIVDealer:
             with open('./item.json', 'w') as f:
                 json.dump(self.item_info, f)
 
-        return {'prices': prices, "world_name": world_name,
+        return {'prices': prices,
+                "world_name": world_name,
                 'min_price_nq': min_price_nq,
                 'max_price_nq': max_price_nq,
                 'min_price_hq': min_price_hq,
@@ -51,21 +53,31 @@ class FFXIVDealer:
                 'item_name': self.item_info[item_id]['item_name']
                 }
 
+    def get_market_history(self, world_id: str, item_id: str):
+        url = MARKET_SALES_URL.format(world_id, item_id)
+        resp = self.s.get(url, timeout=5)
+        res_json = resp.json()
+
     def query_all(self):
         for item_id in ITEMS:
-            local_price = self.get_item(LOCAL_SERVER[0], item_id)['average_price_hq']
+            # get local server price
+            local_sever_item_info = self.get_board_list_info(LOCAL_SERVER[0], item_id)
+            local_price = local_sever_item_info['average_price_hq']
+            local_server_name = local_sever_item_info['world_name']
+            # target server prices
             average_prices_nq = []
             average_prices_hq = []
             server_names = []
             for server in SERVERS:
-                item_info = self.get_item(server, item_id)
+                item_info = self.get_board_list_info(server, item_id)
                 average_prices_nq.append(item_info['average_price_nq'])
                 average_prices_hq.append(item_info['average_price_hq'])
                 server_names.append(item_info['world_name'])
+            # analysis
             idx = np.argmin(average_prices_hq)
             gap = local_price - average_prices_hq[idx]
             if gap > 10000:
-                print(f"{self.item_info[item_id]['item_name']}, Buy at {server_names[idx]}, Sell at {LOCAL_SERVER}, Expect revenue: {gap}")
+                print(f"{self.item_info[item_id]['item_name']}, Buy at {server_names[idx]}, Sell at {local_server_name}, Expect revenue: {gap}")
             time.sleep(2)
 
 
