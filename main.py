@@ -5,10 +5,15 @@ import json
 import os
 import time
 
+# TODO: move macros to a single module
+
 MARKET_BOARD_LISTING_URL = 'https://universalis.app/api/{}/{}'
 MARKET_SALES_URL = 'https://universalis.app/api/history/{}/{}'
+MARKET_ALL_ITEMS_ID_URL = 'https://universalis.app/api/marketable'
 
 ITEM_INFO_URL = 'https://cafemaker.wakingsands.com/item/{}'
+
+VALUABLE_THRESHOLD = 10000
 
 
 class FFXIVDealer:
@@ -33,6 +38,7 @@ class FFXIVDealer:
         average_price_hq = res_json['averagePriceHQ']
         average_price_nq = res_json['averagePriceNQ']
         prices = [i['pricePerUnit'] for i in listings]
+        regular_sale_velocity = res_json['regularSaleVelocity']
 
         if not self.item_info.get(item_id):
             resp = self.s.get(ITEM_INFO_URL.format(item_id), timeout=5)
@@ -50,16 +56,19 @@ class FFXIVDealer:
                 'max_price_hq': max_price_hq,
                 'average_price_hq': average_price_hq,
                 'average_price_nq': average_price_nq,
-                'item_name': self.item_info[item_id]['item_name']
+                'item_name': self.item_info[item_id]['item_name'],
+                'regular_sale_velocity': regular_sale_velocity
                 }
 
     def get_market_history(self, world_id: str, item_id: str):
         url = MARKET_SALES_URL.format(world_id, item_id)
         resp = self.s.get(url, timeout=5)
         res_json = resp.json()
+        # TODO: continue the history getter function
 
     def query_all(self):
-        for item_id in ITEMS:
+        item_list = self.s.get(MARKET_ALL_ITEMS_ID_URL, timeout=5).json()
+        for item_id in item_list:
             # get local server price
             local_sever_item_info = self.get_board_list_info(LOCAL_SERVER[0], item_id)
             local_price = local_sever_item_info['average_price_hq']
@@ -76,8 +85,10 @@ class FFXIVDealer:
             # analysis
             idx = np.argmin(average_prices_hq)
             gap = local_price - average_prices_hq[idx]
-            if gap > 10000:
+            if gap > VALUABLE_THRESHOLD:
                 print(f"{self.item_info[item_id]['item_name']}, Buy at {server_names[idx]}, Sell at {local_server_name}, Expect revenue: {gap}")
+            else:
+                print(f"{self.item_info[item_id]['item_name']}, not valuable")
             time.sleep(1)
 
 
