@@ -78,7 +78,7 @@ class FFXIVDealer:
             gap = local_price - average_prices_hq[idx]
             if gap > 10000:
                 print(f"{self.item_info[item_id]['item_name']}, Buy at {server_names[idx]}, Sell at {local_server_name}, Expect revenue: {gap}")
-            time.sleep(2)
+            time.sleep(1)
 
 
 if __name__ == '__main__':
