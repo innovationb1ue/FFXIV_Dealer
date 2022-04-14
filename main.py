@@ -97,6 +97,7 @@ class FFXIVDealer:
         # item_list = self.s.get(MARKET_ALL_ITEMS_ID_URL, timeout=5).json()[::-1]
         # get fixed items only
         item_list = TARGET_ITEMS
+        # loop for target selling items
         for item_id in item_list:
             # get local server price
             local_sever_item_info = self.get_board_list_info(LOCAL_SERVER[0], item_id)
@@ -105,25 +106,34 @@ class FFXIVDealer:
             local_server_name = local_sever_item_info['world_name']
             local_sale_velocity = local_server_histories['sale_velocity']
             # target server prices
-            # todo: change the infos to a object
-            target_server_items = []
+            items = []
             average_prices_nq = []
             average_prices_hq = []
             server_names = []
-            for server in TARGET_SERVERS:
-                item = {}
-                item_info = self.get_board_list_info(server, item_id)
-                item_history = self.get_market_history(server, item_id)
-                item_last_update = item_history.get("last_upload_time").strftime('%Y-%m-%d %H:%m:%S')
-                average_prices_nq.append(item_info['average_price_nq'])
-                average_prices_hq.append(item_info['average_price_hq'])
-                server_names.append(item_info['world_name'])
+            # TARGET_SERVERS is a 2d array
+            for server_list in TARGET_SERVERS:
+                for server in server_list:
+                    item_info = self.get_board_list_info(server, item_id)
+                    item_history = self.get_market_history(server, item_id)
+                    item_last_update = item_history.get("last_upload_time").strftime('%Y-%m-%d %H:%m:%S')
+                    item_info['item_last_update'] = item_last_update
+                    items.append(item_info)
+                    average_prices_nq.append(item_info['average_price_nq'])
+                    average_prices_hq.append(item_info['average_price_hq'])
+                    server_names.append(item_info['world_name'])
             # analysis & report
-            idx = np.argmin(average_prices_hq)
-            gap = local_price - average_prices_hq[idx]
-            if gap > VALUABLE_THRESHOLD:
-                print(f"{self.item_info[item_id]['item_name']}, Buy at {server_names[idx]}, Sell at {local_server_name},"
-                      f" Expect revenue: {gap}, Sale velocity: {local_sale_velocity}, last update: {item_last_update}")
+            idx_hq = np.argmin([i['average_price_hq'] for i in items])
+            gap_hq = local_price - items[idx_hq]['average_price_hq']
+            idx_nq = np.argmin([i['average_price_nq'] for i in items])
+            gap_nq = local_price - items[idx_nq]['average_price_nq']
+            if gap_hq > VALUABLE_THRESHOLD:
+                print(f"{self.item_info[item_id]['item_name']}HQ, Buy at {server_names[idx_hq]}, Sell at {local_server_name},"
+                      f" Expect revenue: {gap_hq}, Sale velocity: {local_sale_velocity}, "
+                      f"last update: {items[idx_hq]['item_last_update']}")
+            if gap_nq > VALUABLE_THRESHOLD:
+                print(f"{self.item_info[item_id]['item_name']}NQ, Buy at {server_names[idx_nq]}, Sell at {local_server_name},"
+                      f" Expect revenue: {gap_nq}, Sale velocity: {local_sale_velocity}, "
+                      f"last update: {items[idx_nq]['item_last_update']}")
             else:
                 print(f"{self.item_info[item_id]['item_name']}, not valuable")
             time.sleep(0.3)
